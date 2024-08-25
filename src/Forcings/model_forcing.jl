@@ -11,22 +11,20 @@ the fields (and field locations) of various forcing functions are available. The
 can be used to infer the location at which the forcing is applied, or to add a field
 dependency to a special forcing object, as for `Relxation`.
 """
-regularize_forcing(forcing, field, field_name, model_field_names) = forcing # fallback
+regularize_forcing(forcing, args...) = forcing # fallback
+# TODO: some checking that `array` is validly-sized could be done here
+regularize_forcing(array::AbstractArray, args...) = Forcing(array)
+regularize_forcing(::Nothing, args...) = zeroforcing
 
 """
     regularize_forcing(forcing::Function, field, field_name, model_field_names)
 
 Wrap `forcing` in a `ContinuousForcing` at the location of `field`.
 """
-function regularize_forcing(forcing::Function, field, field_name, model_field_names)
+function regularize_forcing(forcing::Function, field, args...)
     LX, LY, LZ = location(field)
     return ContinuousForcing{LX, LY, LZ}(forcing)
 end
-
-regularize_forcing(::Nothing, field::AbstractField, field_name, model_field_names) = zeroforcing
-
-# TODO: some checking that `array` is validly-sized could be done here
-regularize_forcing(array::AbstractArray, field::AbstractField, field_name, model_field_names) = Forcing(array)
 
 """
     model_forcing(model_fields; forcings...)
@@ -35,15 +33,14 @@ Return a `NamedTuple` of forcing functions for each field in `model_fields`, wra
 forcing functions in `ContinuousForcing`s and ensuring that `ContinuousForcing`s are
 located correctly for each field.
 """
-function model_forcing(model_fields, grid; forcings...)
+function model_forcing(model_fields; user_forcings...)
 
     model_field_names = keys(model_fields)
 
     regularized_forcings = Tuple(
-        field_name in keys(forcings) ?
-            regularize_forcing(forcings[field_name], field, field_name, model_field_names) :
-            regularize_forcing(nothing, field, field_name, model_field_names)
-        for (field_name, field) in pairs(model_fields)
+        name in keys(forcings) ?
+            regularize_forcing(forcings[name], field, name, model_field_names) : zeroforcing
+        for (name, field) in pairs(model_fields)
     )
 
     specified_forcings = NamedTuple{model_field_names}(regularized_forcings)
