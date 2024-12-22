@@ -44,6 +44,7 @@ function deduce_dimensionality(f)
     return d1, d2, D
 end
 
+axis_str(ibg::ImmersedBoundaryGrid, dim) = axis_str(ibg.underlying_grid, dim)
 axis_str(::RectilinearGrid, dim) = ("x", "y", "z")[dim]
 axis_str(::LatitudeLongitudeGrid, dim) = ("Longitude (deg)", "Latitude (deg)", "z")[dim]
 
