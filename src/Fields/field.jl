@@ -220,7 +220,7 @@ ZFaceField(grid::AbstractGrid, T::DataType=eltype(grid); kw...) = Field((Center,
 #####
 
 # Canonical `similar` for Field (doesn't transfer boundary conditions)
-function Base.similar(f::Field, grid=f.grid)
+function Base.similar(f::Field, grid::AbstractGrid=f.grid)
     loc = location(f)
     return Field(loc,
                  grid,
