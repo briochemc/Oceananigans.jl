@@ -35,6 +35,8 @@ using DifferentiationInterface: Cache
 using SparseConnectivityTracer
 using ForwardDiff: ForwardDiff
 using SparseMatrixColorings
+using ADTypes: KnownJacobianSparsityDetector
+using DifferentiationInterface: jacobian_sparsity_with_contexts
 
 # ── shared grid parameters ───────────────────────────────────────────────────
 const Nx = 4; const Ny = 1; const Nz = 4
@@ -60,13 +62,6 @@ autodifftypes = Union{SparseConnectivityTracer.AbstractTracer,
     i, j, k = @index(Global, NTuple)
     @inbounds GADc[i, j, k] = hydrostatic_free_surface_tracer_tendency(i, j, k, grid, args...)
 end
-
-# ── sparsity/coloring backend ────────────────────────────────────────────────
-const sparse_backend = AutoSparse(
-    AutoForwardDiff();
-    sparsity_detector  = TracerSparsityDetector(; gradient_pattern_type = Set{UInt}),
-    coloring_algorithm = GreedyColoringAlgorithm(),
-)
 
 # ── linear tracer forcing (grid-agnostic) ────────────────────────────────────
 const age_params = (; relaxation_timescale = 3Δt, source_rate = 1.0)
@@ -186,13 +181,28 @@ function check_symmetry(label::String, grid;
     @info "  Warm-up..."
     _tend!(Gvec, cvec, 0.0, ADc_buf, GADc_buf)
 
-    # Jacobian via sparsity detection + ForwardDiff
+    # Detect sparsity pattern (may be asymmetric for IBG+zstar)
     @info "  Detecting sparsity pattern..."
-    prep = prepare_jacobian(_tend!, Gvec, sparse_backend, cvec,
+    S = jacobian_sparsity_with_contexts(
+        _tend!, Gvec, TracerSparsityDetector(; gradient_pattern_type = Set{UInt}), cvec,
+        Constant(0.0), Cache(ADc_buf), Cache(GADc_buf),
+    )
+
+    # Symmetrize: ensure S[i,j] ↔ S[j,i]
+    S_sym = S .| S'
+    @info "  nnz(S) = $(nnz(S)), nnz(S_sym) = $(nnz(S_sym))"
+
+    # Prepare and compute Jacobian with symmetric pattern
+    sym_backend = AutoSparse(
+        AutoForwardDiff();
+        sparsity_detector  = KnownJacobianSparsityDetector(S_sym),
+        coloring_algorithm = GreedyColoringAlgorithm(),
+    )
+    prep = prepare_jacobian(_tend!, Gvec, sym_backend, cvec,
                             Constant(0.0), Cache(ADc_buf), Cache(GADc_buf))
-    buf  = similar(sparsity_pattern(prep), Float64)
-    @info "  Computing Jacobian (nnz pattern = $(nnz(sparsity_pattern(prep))))..."
-    jacobian!(_tend!, Gvec, buf, prep, sparse_backend, cvec,
+    buf = similar(sparsity_pattern(prep), Float64)
+    @info "  Computing Jacobian..."
+    jacobian!(_tend!, Gvec, buf, prep, sym_backend, cvec,
               Constant(0.0), Cache(ADc_buf), Cache(GADc_buf))
     M = copy(buf)
 

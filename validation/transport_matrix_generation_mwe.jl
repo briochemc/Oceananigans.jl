@@ -12,6 +12,8 @@ using DifferentiationInterface: Cache
 using SparseConnectivityTracer
 using ForwardDiff: ForwardDiff
 using SparseMatrixColorings
+using ADTypes: KnownJacobianSparsityDetector
+using DifferentiationInterface: jacobian_sparsity_with_contexts
 using GLMakie
 
 @info "Grid setup"
@@ -140,14 +142,6 @@ function mytendency!(Gcvec, cvec, c_field, Gc_field)
 end
 
 @info "Autodiff setup"
-
-sparse_forward_backend = AutoSparse(
-    AutoForwardDiff();
-    sparsity_detector = TracerSparsityDetector(; gradient_pattern_type = Set{UInt}),
-    coloring_algorithm = GreedyColoringAlgorithm(),
-)
-
-@info "Compute the Jacobian"
 using BenchmarkTools
 
 # Preallocate Fields for Cache contexts
@@ -159,7 +153,24 @@ dc0 = similar(c0)
 @info "Warm-up..."
 mytendency!(dc0, c0, c_buf, Gc_buf)
 
-# Prepare Jacobian — single function, no strict=Val(false) needed
+# Detect sparsity pattern (may be asymmetric for IBG+zstar)
+@info "Detecting sparsity pattern..."
+@time "Detect sparsity" S = jacobian_sparsity_with_contexts(
+    mytendency!, dc0, TracerSparsityDetector(; gradient_pattern_type = Set{UInt}), c0,
+    Cache(c_buf), Cache(Gc_buf),
+)
+
+# Symmetrize: ensure S[i,j] ↔ S[j,i]
+S_sym = S .| S'
+@info "nnz(S) = $(nnz(S)), nnz(S_sym) = $(nnz(S_sym))"
+
+# Prepare Jacobian with symmetric pattern
+sparse_forward_backend = AutoSparse(
+    AutoForwardDiff();
+    sparsity_detector  = KnownJacobianSparsityDetector(S_sym),
+    coloring_algorithm = GreedyColoringAlgorithm(),
+)
+
 @info "Preparing Jacobian..."
 @time "Prepare Jacobian" jac_prep = prepare_jacobian(
     mytendency!, dc0, sparse_forward_backend, c0,
