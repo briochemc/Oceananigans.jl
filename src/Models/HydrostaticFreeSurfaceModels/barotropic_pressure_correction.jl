@@ -34,7 +34,7 @@ adding the barotropic pressure gradient: `u -= g * Δt * ∂η/∂x`, `v -= g * 
 """
 function correct_barotropic_mode!(model, ::ImplicitFreeSurface, Δt)
 
-    launch!(model.architecture, model.grid, :xyz,
+    launch!(model.architecture, model.grid, volume_kernel_parameters(model.grid),
             _barotropic_pressure_correction!,
             model.velocities,
             model.grid,
@@ -64,7 +64,7 @@ end
     i, j, k = @index(Global, NTuple)
 
     @inbounds begin
-        U.u[i, j, k] -= g * Δt * ∂xᶠᶜᶠ(i, j, grid.Nz+1, grid, η)
-        U.v[i, j, k] -= g * Δt * ∂yᶜᶠᶠ(i, j, grid.Nz+1, grid, η)
+        U.u[i, j, k] -= g * Δt * δxᶠᶜᶠ(i, j, grid.Nz+1, grid, η) * Δx⁻¹ᶠᶜᶠ(i, j, k, grid)
+        U.v[i, j, k] -= g * Δt * δyᶜᶠᶠ(i, j, grid.Nz+1, grid, η) * Δy⁻¹ᶜᶠᶠ(i, j, k, grid)
     end
 end

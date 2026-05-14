@@ -319,6 +319,42 @@ function test_field_time_series_in_memory_split(arch, split_filepath, unsplit_fi
     return nothing
 end
 
+function test_field_time_series_split_files(arch)
+    dir = mktempdir()
+    grid = RectilinearGrid(arch, size=(4, 4, 4), extent=(1, 1, 1))
+    model = NonhydrostaticModel(grid, tracers=:c)
+    simulation = Simulation(model, Δt=1, stop_time=10)
+
+    simulation.output_writers[:fields] = JLD2Writer(model, model.tracers;
+                                                     filename = "split_test",
+                                                     dir = dir,
+                                                     schedule = IterationInterval(1),
+                                                     file_splitting = TimeInterval(3),
+                                                     overwrite_existing = true)
+    run!(simulation)
+
+    # Use absolute path (tests glob fix)
+    abs_path = joinpath(dir, "split_test.jld2")
+
+    # Test InMemory backend with split files
+    fts_mem = FieldTimeSeries(abs_path, "c", architecture=arch)
+    @test length(fts_mem.times) == 11
+    @test fts_mem[1] isa Field
+    @test fts_mem[11] isa Field
+
+    # Test OnDisk backend with split files
+    fts_disk = FieldTimeSeries(abs_path, "c"; backend=OnDisk(), architecture=arch)
+    @test length(fts_disk.times) == 11
+
+    # Access from each part file
+    for n in 1:length(fts_disk.times)
+        @test fts_disk[n] isa Field
+    end
+
+    rm(dir, recursive=true, force=true)
+    return nothing
+end
+
 function test_field_time_series_pickup(arch)
     Random.seed!(1234)
     for n in -4:4
@@ -707,6 +743,13 @@ end
                 end
             end
 
+            if output_writer == JLD2Writer
+                @testset "FieldTimeSeries with split files [$(typeof(arch))]" begin
+                    @info "  Testing FieldTimeSeries with split files [$(typeof(arch))]..."
+                    test_field_time_series_split_files(arch)
+                end
+            end
+
             @testset "FieldTimeSeries with Array boundary conditions [$(typeof(arch))] with $output_writer" begin
                 @info "  Testing FieldTimeSeries with Array boundary conditions..."
                 test_field_time_series_array_boundary_conditions(arch)
@@ -763,6 +806,29 @@ end
     @testset "FieldTimeSeries reductions with dims" begin
         @info "  Testing FieldTimeSeries reductions with dims..."
         test_field_time_series_reductions_with_dims()
+    end
+
+    @testset "FieldTimeSeries with singleton integer indices" begin
+        @info "  Testing FieldTimeSeries with singleton integer indices..."
+        grid = RectilinearGrid(size=(4, 4, 4), extent=(1, 1, 1))
+        times = [0.0, 1.0]
+
+        # Integer indices should work the same as UnitRange indices
+        fts_int = FieldTimeSeries{Center, Center, Center}(grid, times; indices=(:, :, 4))
+        fts_range = FieldTimeSeries{Center, Center, Center}(grid, times; indices=(:, :, 4:4))
+        @test size(fts_int) == size(fts_range)
+        @test indices(fts_int) == indices(fts_range)
+
+        # Also test integer indices in other dimensions
+        fts_i = FieldTimeSeries{Center, Center, Center}(grid, times; indices=(2, :, :))
+        @test size(fts_i) == (1, 4, 4, 2)
+
+        fts_j = FieldTimeSeries{Center, Center, Center}(grid, times; indices=(:, 3, :))
+        @test size(fts_j) == (4, 1, 4, 2)
+
+        # Test with loc/grid constructor directly
+        fts_loc = FieldTimeSeries((Center(), Center(), Center()), grid, times; indices=(:, :, 4))
+        @test size(fts_loc) == (4, 4, 1, 2)
     end
 
     @testset "Time Interpolation" begin

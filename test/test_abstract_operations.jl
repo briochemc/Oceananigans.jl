@@ -114,13 +114,13 @@ for arch in archs
                 end
             end
 
-            @test compute!(Field(ZeroField() + u)) == u
-            @test compute!(Field(u + ZeroField())) == u
-            @test compute!(Field(-ZeroField() + u)) == u
-            @test compute!(Field(u - ZeroField())) == u
-            @test compute!(Field(ZeroField() * u)) == ZeroField()
-            @test compute!(Field(u * ZeroField())) == ZeroField()
-            @test compute!(Field(ZeroField() / u)) == ZeroField()
+            @test Field(ZeroField() + u) == u
+            @test Field(u + ZeroField()) == u
+            @test Field(-ZeroField() + u) == u
+            @test Field(u - ZeroField()) == u
+            @test Field(ZeroField() * u) == ZeroField()
+            @test Field(u * ZeroField()) == ZeroField()
+            @test Field(ZeroField() / u) == ZeroField()
             @test u / ZeroField() == ConstantField(Inf)
 
             @test ZeroField() + 1 == ConstantField(1)
@@ -136,15 +136,32 @@ for arch in archs
             @test ZeroField() - ZeroField() == ZeroField()
             @test ZeroField() * ZeroField() == ZeroField()
 
-            @test compute!(Field(ConstantField(1) + u)) == compute!(Field(1 + u))
-            @test compute!(Field(ConstantField(1) - u)) == compute!(Field(1 - u))
-            @test compute!(Field(ConstantField(1) * u)) == compute!(Field(1 * u))
-            @test compute!(Field(u / ConstantField(1))) == compute!(Field(u / 1))
+            @test Field(ConstantField(1) + u) == Field(1 + u)
+            @test Field(ConstantField(1) - u) == Field(1 - u)
+            @test Field(ConstantField(1) * u) == Field(1 * u)
+            @test Field(u / ConstantField(1)) == Field(u / 1)
 
             @test ConstantField(1) + 1 == ConstantField(2)
             @test ConstantField(1) - 1 == ConstantField(0)
             @test ConstantField(1) * 2 == ConstantField(2)
             @test ConstantField(1) / 2 == ConstantField(1/2)
+        end
+
+        @testset "Comparison operations [$A]" begin
+            for (ψ, ϕ) in ((u, v), (u, c))
+                for op in (>, <, >=, <=)
+                    @test op(ψ, ϕ) isa BinaryOperation
+                    @test eltype(op(ψ, ϕ)) == Bool
+                    @test @allowscalar typeof(op(ψ, ϕ)[2, 2, 2]) <: Bool
+                end
+            end
+
+            # Test comparisons with numbers
+            for op in (>, <, >=, <=)
+                @test op(u, 0) isa BinaryOperation
+                @test op(0, u) isa BinaryOperation
+                @test eltype(op(u, 0)) == Bool
+            end
         end
 
         @testset "Multiary operations [$A]" begin
@@ -176,13 +193,20 @@ for arch in archs
             u, v, w = VelocityFields(grid)
             T, S = TracerFields((:T, :S), grid)
 
-            for op in (+, *, -, /)
+            for op in (+, *, -, /, atand, atan, mod)
                 @test simple_binary_operation(op, u, v, num1, num2)
                 @test simple_binary_operation(op, u, w, num1, num2)
                 @test simple_binary_operation(op, u, T, num1, num2)
                 @test simple_binary_operation(op, T, S, num1, num2)
             end
             @test three_field_addition(u, v, w, num1, num2)
+
+            # Comparison operations
+            for op in (>, <, >=, <=)
+                @test simple_binary_operation(op, u, v, num1, num2)
+                @test simple_binary_operation(op, u, v, num2, num1)
+                @test simple_binary_operation(op, T, S, num1, num1) # equal values
+            end
         end
 
         @testset "Derivatives" begin
@@ -291,6 +315,23 @@ for arch in archs
             @test u + 2 isa BinaryOperation
             @test u - 2 isa BinaryOperation
             @test u / 2 isa BinaryOperation
+
+            # Comparison operators produce BinaryOperations
+            @test (u > v) isa BinaryOperation
+            @test (u < v) isa BinaryOperation
+            @test (u >= v) isa BinaryOperation
+            @test (u <= v) isa BinaryOperation
+            @test (u > 0) isa BinaryOperation
+            @test (0 < u) isa BinaryOperation
+
+            # Eltype inference: arithmetic ops return Float64, comparisons return Bool
+            @test eltype(u + v) == Float64
+            @test eltype(u * v) == Float64
+            @test eltype(sin(u)) == Float64
+            @test eltype(u + v + w) == Float64
+            @test eltype(u > v) == Bool
+            @test eltype(u >= 0) == Bool
+            @test eltype(0 < u) == Bool
         end
 
         @testset "BinaryOperations with grid metric operations [$A]" begin

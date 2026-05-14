@@ -1,7 +1,6 @@
-using Oceananigans.Advection: Advection, WENO, VectorInvariant, adapt_advection_order, cell_advection_timescale
-using Oceananigans.BuoyancyFormulations: BuoyancyFormulations, BuoyancyForce,
-    NegativeZDirection, AbstractBuoyancyFormulation, validate_unit_vector
-using Oceananigans.TimeSteppers: QuasiAdamsBashforth2TimeStepper, update_state!
+using Oceananigans.Advection: Advection, WENO, VectorInvariant, adapt_advection_order, cell_advection_timescale, materialize_advection
+using Oceananigans.BuoyancyFormulations: BuoyancyFormulations, BuoyancyForce, NegativeZDirection, AbstractBuoyancyFormulation, validate_unit_vector
+using Oceananigans.TimeSteppers: TimeSteppers, QuasiAdamsBashforth2TimeStepper
 using Oceananigans.Models: Models, ExplicitFreeSurface, HydrostaticFreeSurfaceModel, ImplicitFreeSurface, PrescribedVelocityFields
 using Oceananigans.Models.HydrostaticFreeSurfaceModels: HydrostaticFreeSurfaceModels
 using Oceananigans.TurbulenceClosures: TurbulenceClosures, VerticallyImplicitTimeDiscretization, implicit_diffusion_solver
@@ -15,6 +14,11 @@ const CubedSphereModel = HydrostaticFreeSurfaceModel{<:Any, <:Any, <:AbstractArc
 
 function Advection.adapt_advection_order(advection::MultiRegionObject, grid::MultiRegionGrids)
     @apply_regionally new_advection = adapt_advection_order(advection, grid)
+    return new_advection
+end
+
+function Advection.materialize_advection(advection::MultiRegionObject, grid::MultiRegionGrids)
+    @apply_regionally new_advection = materialize_advection(advection, grid)
     return new_advection
 end
 
@@ -81,12 +85,9 @@ end
 
 HydrostaticFreeSurfaceModels.validate_tracer_advection(tracer_advection::MultiRegionObject, grid::MultiRegionGrids) = tracer_advection, NamedTuple()
 
-# A cubed sphere needs to fill u and v separately
-# U and V (in case of a `SplitExplicitFreeSurface`) are filled in `initialize!`
-function Models.initialization_update_state!(model::CubedSphereModel)
-
-    # Update the state of the model
-    update_state!(model)
+# reconcile_state! for a multi-region model.
+# A cubed-sphere grid needs to fill u and v velocity halos together.
+function TimeSteppers.reconcile_state!(model::MultiRegionModel)
 
     u = model.velocities.u
     v = model.velocities.v
@@ -98,9 +99,8 @@ function Models.initialization_update_state!(model::CubedSphereModel)
         !(key ∈ (:u, :v, :U, :V)) && fill_halo_regions!(fields[key], model.clock, Oceananigans.fields(model))
     end
 
-    # Finally, initialize the model (e.g., free surface, vertical coordinate...)
-    Oceananigans.initialize!(model)
-
+    Models.HydrostaticFreeSurfaceModels.reconcile_free_surface!(model.free_surface, model.grid, model.velocities)
+    Models.HydrostaticFreeSurfaceModels.reconcile_vertical_coordinate!(model.vertical_coordinate, model, model.grid)
     return nothing
 end
 

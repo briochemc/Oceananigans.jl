@@ -15,7 +15,7 @@ import Oceananigans.Fields: Field
 
 function FieldTimeSeries(typed_path::NetCDFPath, name::String;
                          backend = InMemory(),
-                         architecture = nothing,
+                         architecture = CPU(),
                          grid = nothing,
                          location = nothing,
                          boundary_conditions = UnspecifiedBoundaryConditions(),
@@ -33,18 +33,9 @@ function FieldTimeSeries(typed_path::NetCDFPath, name::String;
         (:, :, :)
     end
 
-    if isnothing(architecture) # determine architecture
-        if isnothing(grid) # go to default
-            architecture = CPU()
-        else # there's a grid, use that architecture
-            architecture = Oceananigans.Architectures.architecture(grid)
-        end
-    end
-
-    isnothing(grid) && (grid = reconstruct_grid(file))
-
-    # Convert grid to specified architecture
-    grid = on_architecture(architecture, grid)
+    # Read the grid from the file on the correct architecture
+    grid_index = try file[name].attrib["grid_index"] catch; 1 end
+    isnothing(grid) && (grid = reconstruct_grid(file; grid_index, architecture))
 
     isnothing(location) && (location = file[name].attrib["location"] |> materialize_from_netcdf)
     LX, LY, LZ = location
@@ -218,7 +209,8 @@ function Field(location, file::NCDataset, name::String, iter;
         end
     end
 
-    isnothing(grid) && (grid = reconstruct_grid(file))
+    grid_index = try file[name].attrib["grid_index"] catch; 1 end
+    isnothing(grid) && (grid = reconstruct_grid(file; grid_index))
     variable_dimensions = dimnames(file[name])
     time_slice = (ntuple(_ -> :, length(variable_dimensions)-1)..., iter)
     raw_data = file[name][time_slice...]

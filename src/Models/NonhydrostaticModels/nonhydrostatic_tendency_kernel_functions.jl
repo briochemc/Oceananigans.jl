@@ -61,8 +61,8 @@ forces, surface waves, and the prescribed turbulence closure.
 `background_fields` is a `NamedTuple` containing background velocity and tracer
 `FunctionFields`.
 
-The arguments `velocities`, `tracers`, and `diffusivities` are `NamedTuple`s with the three
-velocity components, tracer fields, and precalculated diffusivities where applicable.
+The arguments `velocities`, `tracers`, and `closure_fields` are `NamedTuple`s with the three
+velocity components, tracer fields, and precalculated closure_fields where applicable.
 `forcings` is a named tuple of forcing functions. `hydrostatic_pressure` is the hydrostatic
 pressure anomaly.
 
@@ -79,7 +79,7 @@ pressure anomaly.
                                      velocities,
                                      tracers,
                                      auxiliary_fields,
-                                     diffusivities,
+                                     closure_fields,
                                      hydrostatic_pressure,
                                      clock,
                                      forcing)
@@ -93,11 +93,12 @@ pressure anomaly.
 
     return ( - div_𝐯u(i, j, k, grid, advection, total_velocities, velocities.u)
              - div_𝐯u(i, j, k, grid, advection, velocities, background_fields.velocities.u)
+             - U_dot_∇u_metric(i, j, k, grid, advection, velocities, velocities)
              + x_dot_g_bᶠᶜᶜ(i, j, k, grid, buoyancy, tracers)
              - x_f_cross_U(i, j, k, grid, coriolis, velocities)
              - hydrostatic_pressure_gradient_x(i, j, k, grid, hydrostatic_pressure)
-             - ∂ⱼ_τ₁ⱼ(i, j, k, grid, closure, diffusivities, clock, closure_model_fields, buoyancy)
-             - immersed_∂ⱼ_τ₁ⱼ(i, j, k, grid, velocities, u_immersed_bc, closure, diffusivities, clock, model_fields)
+             - ∂ⱼ_τ₁ⱼ(i, j, k, grid, closure, closure_fields, clock, closure_model_fields, buoyancy)
+             - immersed_∂ⱼ_τ₁ⱼ(i, j, k, grid, velocities, u_immersed_bc, closure, closure_fields, clock, model_fields)
              + x_curl_Uˢ_cross_U(i, j, k, grid, stokes_drift, velocities, clock.time)
              + ∂t_uˢ(i, j, k, grid, stokes_drift, clock.time)
              + forcing(i, j, k, grid, clock, model_fields))
@@ -123,8 +124,8 @@ forces, surface waves, and the prescribed turbulence closure.
 `background_fields` is a `NamedTuple` containing background velocity and tracer
 `FunctionFields`.
 
-The arguments `velocities`, `tracers`, and `diffusivities` are `NamedTuple`s with the three
-velocity components, tracer fields, and precalculated diffusivities where applicable.
+The arguments `velocities`, `tracers`, and `closure_fields` are `NamedTuple`s with the three
+velocity components, tracer fields, and precalculated closure_fields where applicable.
 `forcings` is a named tuple of forcing functions. `hydrostatic_pressure` is the hydrostatic
 pressure anomaly.
 
@@ -141,7 +142,7 @@ pressure anomaly.
                                      velocities,
                                      tracers,
                                      auxiliary_fields,
-                                     diffusivities,
+                                     closure_fields,
                                      hydrostatic_pressure,
                                      clock,
                                      forcing)
@@ -155,11 +156,12 @@ pressure anomaly.
 
     return ( - div_𝐯v(i, j, k, grid, advection, total_velocities, velocities.v)
              - div_𝐯v(i, j, k, grid, advection, velocities, background_fields.velocities.v)
+             - U_dot_∇v_metric(i, j, k, grid, advection, velocities, velocities)
              + y_dot_g_bᶜᶠᶜ(i, j, k, grid, buoyancy, tracers)
              - y_f_cross_U(i, j, k, grid, coriolis, velocities)
              - hydrostatic_pressure_gradient_y(i, j, k, grid, hydrostatic_pressure)
-             - ∂ⱼ_τ₂ⱼ(i, j, k, grid, closure, diffusivities, clock, closure_model_fields, buoyancy)
-             - immersed_∂ⱼ_τ₂ⱼ(i, j, k, grid, velocities, v_immersed_bc, closure, diffusivities, clock, model_fields)
+             - ∂ⱼ_τ₂ⱼ(i, j, k, grid, closure, closure_fields, clock, closure_model_fields, buoyancy)
+             - immersed_∂ⱼ_τ₂ⱼ(i, j, k, grid, velocities, v_immersed_bc, closure, closure_fields, clock, model_fields)
              + y_curl_Uˢ_cross_U(i, j, k, grid, stokes_drift, velocities, clock.time)
              + ∂t_vˢ(i, j, k, grid, stokes_drift, clock.time)
              + forcing(i, j, k, grid, clock, model_fields))
@@ -189,8 +191,8 @@ forces, surface waves, and the prescribed turbulence closure.
 `background_fields` is a `NamedTuple` containing background velocity and tracer
 `FunctionFields`.
 
-The arguments `velocities`, `tracers`, and `diffusivities` are `NamedTuple`s with the three
-velocity components, tracer fields, and precalculated diffusivities where applicable.
+The arguments `velocities`, `tracers`, and `closure_fields` are `NamedTuple`s with the three
+velocity components, tracer fields, and precalculated closure_fields where applicable.
 `forcings` is a named tuple of forcing functions.
 
 `clock` keeps track of `clock.time` and `clock.iteration`.
@@ -206,7 +208,7 @@ velocity components, tracer fields, and precalculated diffusivities where applic
                                      velocities,
                                      tracers,
                                      auxiliary_fields,
-                                     diffusivities,
+                                     closure_fields,
                                      hydrostatic_pressure,
                                      clock,
                                      forcing)
@@ -220,10 +222,11 @@ velocity components, tracer fields, and precalculated diffusivities where applic
 
     return ( - div_𝐯w(i, j, k, grid, advection, total_velocities, velocities.w)
              - div_𝐯w(i, j, k, grid, advection, velocities, background_fields.velocities.w)
+             - U_dot_∇w_metric(i, j, k, grid, advection, velocities, velocities)
              + maybe_z_dot_g_bᶜᶜᶠ(i, j, k, grid, hydrostatic_pressure, buoyancy, tracers)
              - z_f_cross_U(i, j, k, grid, coriolis, velocities)
-             - ∂ⱼ_τ₃ⱼ(i, j, k, grid, closure, diffusivities, clock, closure_model_fields, buoyancy)
-             - immersed_∂ⱼ_τ₃ⱼ(i, j, k, grid, velocities, w_immersed_bc, closure, diffusivities, clock, model_fields)
+             - ∂ⱼ_τ₃ⱼ(i, j, k, grid, closure, closure_fields, clock, closure_model_fields, buoyancy)
+             - immersed_∂ⱼ_τ₃ⱼ(i, j, k, grid, velocities, w_immersed_bc, closure, closure_fields, clock, model_fields)
              + z_curl_Uˢ_cross_U(i, j, k, grid, stokes_drift, velocities, clock.time)
              + ∂t_wˢ(i, j, k, grid, stokes_drift, clock.time)
              + forcing(i, j, k, grid, clock, model_fields))
@@ -249,8 +252,8 @@ turbulence closure and buoyancy model.
 `background_fields` is a `NamedTuple` containing background velocity and tracer
 `FunctionFields`.
 
-The arguments `velocities`, `tracers`, and `diffusivities` are `NamedTuple`s with the three
-velocity components, tracer fields, and precalculated diffusivities where applicable.
+The arguments `velocities`, `tracers`, and `closure_fields` are `NamedTuple`s with the three
+velocity components, tracer fields, and precalculated closure_fields where applicable.
 `forcings` is a named tuple of forcing functions.
 
 `clock` keeps track of `clock.time` and `clock.iteration`.
@@ -267,7 +270,7 @@ velocity components, tracer fields, and precalculated diffusivities where applic
                                  velocities,
                                  tracers,
                                  auxiliary_fields,
-                                 diffusivities,
+                                 closure_fields,
                                  clock,
                                  forcing) where tracer_index
 
@@ -292,8 +295,8 @@ velocity components, tracer fields, and precalculated diffusivities where applic
 
     return ( - div_Uc(i, j, k, grid, advection, total_velocities, c)
              - div_Uc(i, j, k, grid, advection, velocities, background_fields_c)
-             - ∇_dot_qᶜ(i, j, k, grid, closure, diffusivities, val_index, closure_c, clock, closure_model_fields, buoyancy)
-             - immersed_∇_dot_qᶜ(i, j, k, grid, closure_c, c_immersed_bc, closure, diffusivities, val_index, clock, model_fields)
+             - ∇_dot_qᶜ(i, j, k, grid, closure, closure_fields, val_index, closure_c, clock, closure_model_fields, buoyancy)
+             - immersed_∇_dot_qᶜ(i, j, k, grid, closure_c, c_immersed_bc, closure, closure_fields, val_index, clock, model_fields)
              + biogeochemical_transition(i, j, k, grid, biogeochemistry, val_tracer_name, clock, model_fields)
              + forcing(i, j, k, grid, clock, model_fields))
 end
