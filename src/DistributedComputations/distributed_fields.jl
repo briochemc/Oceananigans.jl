@@ -100,6 +100,18 @@ function synchronize_communication!(field::DistributedField)
 
     recv_from_buffers!(field.data, field.communication_buffers, field.grid)
 
+    # Force the device to wait until both the MPI Waitall above and the
+    # recv-buffer unpack kernels just launched have actually completed in
+    # GPU memory before any downstream kernel reads from `field.data`.
+    # Without this, on CUDA-aware MPI builds the recv lands on UCX's
+    # internal stream while subsequent tendency kernels launch on the
+    # user's stream — and cross-stream visibility is implementation-
+    # dependent (Waitall guarantees host-side completion, not user-stream
+    # visibility). Symptom: per-step systematic offset at the first
+    # interior row adjacent to an MPI seam (bell-shaped contamination
+    # over iters), only on GPU+distributed.
+    sync_device!(arch)
+
     return nothing
 end
 
